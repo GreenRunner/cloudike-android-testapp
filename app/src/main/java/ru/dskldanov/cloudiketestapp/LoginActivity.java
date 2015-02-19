@@ -7,6 +7,7 @@ import android.app.Activity;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -14,9 +15,21 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import com.octo.android.robospice.SpiceManager;
+import com.octo.android.robospice.persistence.exception.SpiceException;
+import com.octo.android.robospice.request.listener.RequestListener;
+
+import ru.dskldanov.cloudiketestapp.model.Token;
+import ru.dskldanov.cloudiketestapp.rest.CloudikeRestService;
+import ru.dskldanov.cloudiketestapp.rest.requests.AccountsLoginRequest;
 
 
 public class LoginActivity extends Activity {
+
+    private static final String TAG = LoginActivity.class.getSimpleName();
+    private SpiceManager spiceManager = new SpiceManager(CloudikeRestService.class);
 
     private EditText emailView;
     private EditText passwordView;
@@ -54,9 +67,20 @@ public class LoginActivity extends Activity {
         progressView = findViewById(R.id.login_progress);
     }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        spiceManager.start(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        spiceManager.shouldStop();
+    }
+
 
     public void attemptLogin() {
-
 
         // Reset errors.
         emailView.setError(null);
@@ -95,19 +119,22 @@ public class LoginActivity extends Activity {
         } else {
             // Show a progress spinner, and kick off a background task to
             // perform the user login attempt.
-            showProgress(true);
 
+            try {
+                spiceManager.execute(new AccountsLoginRequest(emailView.getText().toString(),passwordView.getText().toString()), new LoginRequestListener() );
+                showProgress(true);
+            } catch (Exception e) {
+                Log.e(TAG,"error start authorization process",e);
+            }
         }
     }
 
     private boolean isEmailValid(String email) {
-        //FIXME: Maybe this needs more
         return email.contains("@");
     }
 
     private boolean isPasswordValid(String password) {
-        //TODO: add password validation
-        return password.length() > 4;
+        return password.length() > 5;
     }
 
     /**
@@ -145,6 +172,25 @@ public class LoginActivity extends Activity {
             loginFormView.setVisibility(show ? View.GONE : View.VISIBLE);
         }
     }
+
+
+    public class LoginRequestListener implements RequestListener<Token> {
+
+        @Override
+        public void onRequestFailure(SpiceException spiceException) {
+            Log.e(TAG,"authorization failed", spiceException);
+            showProgress(false);
+            Toast.makeText(LoginActivity.this,"authorization failed",Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onRequestSuccess(Token token) {
+            Log.d(TAG,"authorization process finished " + token.id );
+            showProgress(false);
+            Toast.makeText(LoginActivity.this,"authorization process finished " + token.id,Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
 }
 
